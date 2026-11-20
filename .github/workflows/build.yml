@@ -49,6 +49,11 @@ jobs:
         working-directory: source/HelixLauncher-main
         shell: pwsh
         run: |
+          $main = "source/HelixLauncher-main/helixlauncher-gui/src/main.rs"
+          $source = Get-Content -Raw $main
+          if ($source -notmatch '#!\[windows_subsystem\s*=\s*"windows"\]') {
+            Set-Content -Path $main -Value ('#![windows_subsystem = "windows"]' + "`r`n" + $source) -NoNewline
+          }
           cargo build --release -p helixlauncher-gui
           $exe = "target/release/helixlauncher-gui.exe"
           if (!(Test-Path $exe)) { throw "NEMI launcher executable was not produced" }
