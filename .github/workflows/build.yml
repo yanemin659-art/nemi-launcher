@@ -57,7 +57,7 @@ jobs:
           if (!(Get-Command windeployqt -ErrorAction SilentlyContinue)) {
             throw "windeployqt was not found; Qt deployment cannot be packaged."
           }
-          windeployqt --release --compiler-runtime --qmldir "qml" "../../dist/windows/app/NEMI-LAUNCHER.exe"
+          windeployqt --release --compiler-runtime --qmldir "helixlauncher-gui/qml" "../../dist/windows/app/NEMI-LAUNCHER.exe"
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
       - name: Install Inno Setup
