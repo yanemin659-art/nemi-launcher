@@ -23,12 +23,10 @@ jobs:
           ref: main
           path: source/HelixLauncher-main
 
-      - name: Apply uploaded NEMI interface files
+      - name: Apply NEMI interface files
         shell: pwsh
         run: |
-          $encoded = (Get-Content "windows-ui.zip.b64" -Raw) -replace "\s", ""
-          [IO.File]::WriteAllBytes("windows-ui.zip", [Convert]::FromBase64String($encoded))
-          Expand-Archive -LiteralPath "windows-ui.zip" -DestinationPath "source/HelixLauncher-main" -Force
+          Copy-Item "windows-ui\\*.qml" "source/HelixLauncher-main/helixlauncher-gui/qml/" -Force
           if (!(Test-Path "source/HelixLauncher-main/helixlauncher-gui/qml/main.qml")) {
             throw "NEMI interface files were not applied"
           }
