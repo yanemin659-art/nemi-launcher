@@ -107,7 +107,13 @@ jobs:
     name: Build Android Minecraft Java APK
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Java build toolchains
+      - name: Install Java 8 toolchain
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Set Java 21 as build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -120,6 +126,32 @@ jobs:
           ref: v3_openjdk
           submodules: recursive
           path: amethyst
+
+      - name: Apply NEMI Launcher branding
+        working-directory: amethyst
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path("app_pojavlauncher/build.gradle")
+          text = gradle.read_text()
+          text = text.replace('resValue "string", "app_name", "Amethyst (Debug)"', 'resValue "string", "app_name", "NEMİ LAUNCHER"')
+          text = text.replace('resValue "string", "app_short_name", "Amethyst (Debug)"', 'resValue "string", "app_short_name", "NEMİ"')
+          text = text.replace('resValue "string", "app_name", "Amethyst"', 'resValue "string", "app_name", "NEMİ LAUNCHER"')
+          text = text.replace('resValue "string", "app_short_name", "Amethyst"', 'resValue "string", "app_short_name", "NEMİ"')
+          gradle.write_text(text)
+          layout = Path("app_pojavlauncher/src/main/res/layout/fragment_launcher.xml")
+          text = layout.read_text()
+          text = text.replace(
+              '<com.kdt.mcgui.LauncherMenuButton\n\t\t\t\tandroid:id="@+id/news_button"',
+              '<TextView\n\t\t\t\tandroid:id="@+id/nemi_brand_title"\n\t\t\t\tandroid:layout_width="match_parent"\n\t\t\t\tandroid:layout_height="wrap_content"\n\t\t\t\tandroid:paddingStart="20dp"\n\t\t\t\tandroid:paddingTop="22dp"\n\t\t\t\tandroid:paddingBottom="18dp"\n\t\t\t\tandroid:text="NEMİ LAUNCHER"\n\t\t\t\tandroid:textColor="@color/text_color"\n\t\t\t\tandroid:textSize="24sp"\n\t\t\t\tandroid:textStyle="bold"\n\t\t\t\tapp:layout_constraintTop_toTopOf="parent" />\n\t\t\t<com.kdt.mcgui.LauncherMenuButton\n\t\t\t\tandroid:id="@+id/news_button"'
+          )
+          text = text.replace('app:layout_constraintTop_toTopOf="parent"\n\t\t\t\tapp:layout_constraintStart_toStartOf="parent"\n\t\t\t\tapp:layout_constraintEnd_toStartOf="@id/social_divider"', 'app:layout_constraintTop_toBottomOf="@id/nemi_brand_title"\n\t\t\t\tapp:layout_constraintStart_toStartOf="parent"\n\t\t\t\tapp:layout_constraintEnd_toStartOf="@id/social_divider"', 1)
+          text = text.replace('app:layout_constraintTop_toTopOf="parent"\n\t\t\t\tapp:layout_constraintStart_toEndOf="@id/social_divider"', 'app:layout_constraintTop_toBottomOf="@id/nemi_brand_title"\n\t\t\t\tapp:layout_constraintStart_toEndOf="@id/social_divider"', 1)
+          layout.write_text(text)
+          strings = Path("app_pojavlauncher/src/main/res/values/strings.xml")
+          text = strings.read_text().replace('<string name="app_name" translatable="false">Amethyst</string>', '<string name="app_name" translatable="false">NEMİ LAUNCHER</string>')
+          strings.write_text(text)
+          PY
 
       - name: Build Android APK
         working-directory: amethyst
