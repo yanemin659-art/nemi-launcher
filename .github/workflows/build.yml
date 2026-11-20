@@ -16,19 +16,21 @@ jobs:
       - name: Checkout NEMI repository
         uses: actions/checkout@v4
 
-      - name: Require the customized Helix source archive
-        shell: pwsh
-        run: |
-          if (!(Test-Path "nemi-source.zip")) {
-            throw "nemi-source.zip is missing. Upload the customized source ZIP to the repository root, then push to main."
-          }
+      - name: Checkout Helix launcher source
+        uses: actions/checkout@v4
+        with:
+          repository: HelixLauncher/HelixLauncher
+          ref: main
+          path: source/HelixLauncher-main
 
-      - name: Extract customized source
+      - name: Apply uploaded NEMI interface files
         shell: pwsh
         run: |
-          Expand-Archive -LiteralPath "nemi-source.zip" -DestinationPath "source" -Force
-          if (!(Test-Path "source/HelixLauncher-main/Cargo.toml")) {
-            throw "Unexpected source archive layout: expected HelixLauncher-main/Cargo.toml"
+          $encoded = (Get-Content "windows-ui.zip.b64" -Raw) -replace "\s", ""
+          [IO.File]::WriteAllBytes("windows-ui.zip", [Convert]::FromBase64String($encoded))
+          Expand-Archive -LiteralPath "windows-ui.zip" -DestinationPath "source/HelixLauncher-main" -Force
+          if (!(Test-Path "source/HelixLauncher-main/helixlauncher-gui/qml/main.qml")) {
+            throw "NEMI interface files were not applied"
           }
 
       - name: Install Rust
@@ -55,7 +57,7 @@ jobs:
           if (!(Get-Command windeployqt -ErrorAction SilentlyContinue)) {
             throw "windeployqt was not found; Qt deployment cannot be packaged."
           }
-          windeployqt --release --compiler-runtime "../../dist/windows/app/NEMI-LAUNCHER.exe"
+          windeployqt --release --compiler-runtime --qmldir "qml" "../../dist/windows/app/NEMI-LAUNCHER.exe"
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
       - name: Install Inno Setup
