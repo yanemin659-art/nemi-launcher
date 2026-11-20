@@ -6,26 +6,35 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   windows:
-    name: Windows launcher EXE
+    name: Build Windows installer
     runs-on: windows-2022
     steps:
-      - name: Checkout build configuration
+      - name: Checkout NEMI repository
         uses: actions/checkout@v4
 
-      - name: Checkout HelixLauncher source
-        uses: actions/checkout@v4
-        with:
-          repository: HelixLauncher/HelixLauncher
-          path: helix
+      - name: Require the customized Helix source archive
+        shell: pwsh
+        run: |
+          if (!(Test-Path "nemi-source.zip")) {
+            throw "nemi-source.zip is missing. Upload the customized source ZIP to the repository root, then push to main."
+          }
+
+      - name: Extract customized source
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath "nemi-source.zip" -DestinationPath "source" -Force
+          if (!(Test-Path "source/HelixLauncher-main/Cargo.toml")) {
+            throw "Unexpected source archive layout: expected HelixLauncher-main/Cargo.toml"
+          }
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Qt
+      - name: Install Qt 5.15.2
         uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
@@ -34,39 +43,78 @@ jobs:
           arch: win64_msvc2019_64
           cache: true
 
-      - name: Build Windows launcher
-        working-directory: helix
+      - name: Build customized NEMI launcher
+        working-directory: source/HelixLauncher-main
         shell: pwsh
         run: |
           cargo build --release -p helixlauncher-gui
-          if (!(Test-Path "target/release/helixlauncher-gui.exe")) {
-            throw "Helix GUI executable was not produced"
+          $exe = "target/release/helixlauncher-gui.exe"
+          if (!(Test-Path $exe)) { throw "NEMI launcher executable was not produced" }
+          New-Item -ItemType Directory -Force -Path "../../dist/windows/app" | Out-Null
+          Copy-Item $exe "../../dist/windows/app/NEMI-LAUNCHER.exe"
+          if (!(Get-Command windeployqt -ErrorAction SilentlyContinue)) {
+            throw "windeployqt was not found; Qt deployment cannot be packaged."
           }
-          New-Item -ItemType Directory -Force -Path ../dist/windows | Out-Null
-          Copy-Item "target/release/helixlauncher-gui.exe" "../dist/windows/NEMI-LAUNCHER.exe"
-          if (Get-Command windeployqt -ErrorAction SilentlyContinue) {
-            windeployqt --release --compiler-runtime "../dist/windows/NEMI-LAUNCHER.exe"
-          }
+          windeployqt --release --compiler-runtime "../../dist/windows/app/NEMI-LAUNCHER.exe"
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
-      - name: Upload Windows artifact
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Create single-file Windows installer
+        shell: pwsh
+        run: |
+          @'
+          [Setup]
+          AppId={{A6D8B5F0-7C4E-4A35-9D21-6E4A1B8C2031}
+          AppName=NEMI LAUNCHER
+          AppVersion=0.1.0
+          AppPublisher=NEMI Studios
+          DefaultDirName={autopf}\NEMI LAUNCHER
+          DefaultGroupName=NEMI LAUNCHER
+          OutputDir=dist\windows
+          OutputBaseFilename=NEMI-LAUNCHER-Setup
+          ArchitecturesInstallIn64BitMode=x64
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+
+          [Files]
+          Source: "dist\windows\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{group}\NEMI LAUNCHER"; Filename: "{app}\NEMI-LAUNCHER.exe"
+          Name: "{autodesktop}\NEMI LAUNCHER"; Filename: "{app}\NEMI-LAUNCHER.exe"
+
+          [Run]
+          Filename: "{app}\NEMI-LAUNCHER.exe"; Description: "NEMI LAUNCHER başlat"; Flags: postinstall nowait skipifsilent
+          '@ | Set-Content -Encoding ASCII "nemi-installer.iss"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler not found" }
+          & $iscc "nemi-installer.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup packaging failed" }
+
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: NEMI-LAUNCHER-Windows-EXE
-          path: dist/windows/
+          name: NEMI-LAUNCHER-Windows
+          path: dist/windows/NEMI-LAUNCHER-Setup.exe
           if-no-files-found: error
           retention-days: 14
 
   android:
-    name: Android Minecraft Java APK
+    name: Build Android Minecraft Java APK
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Java toolchains
+      - name: Set up Java build toolchains
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: |
             8
             21
+          cache: gradle
 
       - name: Checkout Amethyst Android engine
         uses: actions/checkout@v4
@@ -76,16 +124,50 @@ jobs:
           submodules: recursive
           path: amethyst
 
-      - name: Build Minecraft Java Android launcher
+      - name: Build Android APK
         working-directory: amethyst
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon :app_pojavlauncher:assembleDebug
+          mkdir -p ../dist/android
+          cp app_pojavlauncher/build/outputs/apk/debug/*.apk ../dist/android/NEMI-LAUNCHER-Android.apk
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: NEMI-LAUNCHER-Android-Minecraft-Java-APK
-          path: amethyst/app_pojavlauncher/build/outputs/apk/debug/*.apk
+          name: NEMI-LAUNCHER-Android
+          path: dist/android/NEMI-LAUNCHER-Android.apk
           if-no-files-found: error
           retention-days: 14
+
+  publish:
+    name: Publish direct EXE and APK downloads
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: NEMI-LAUNCHER-Windows
+          path: release
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: NEMI-LAUNCHER-Android
+          path: release
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nemi-latest
+          name: NEMI LAUNCHER — Latest Build
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            release/NEMI-LAUNCHER-Setup.exe
+            release/NEMI-LAUNCHER-Android.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
