@@ -51,9 +51,13 @@ jobs:
         run: |
           $main = "helixlauncher-gui/src/main.rs"
           $source = Get-Content -Raw $main
+          # Do not force KDE's desktop style: it is not part of the Windows Qt deployment.
+          # Qt's built-in Basic style is shipped with Qt Quick Controls.
+          $source = $source.Replace('QQuickStyle::set_style("org.kde.desktop")', 'QQuickStyle::set_style("Basic")')
           if ($source -notmatch '#!\[windows_subsystem\s*=\s*"windows"\]') {
-            Set-Content -Path $main -Value ('#![windows_subsystem = "windows"]' + "`r`n" + $source) -NoNewline
+            $source = '#![windows_subsystem = "windows"]' + "`r`n" + $source
           }
+          Set-Content -Path $main -Value $source -NoNewline
           cargo build --release -p helixlauncher-gui
           $exe = "target/release/helixlauncher-gui.exe"
           if (!(Test-Path $exe)) { throw "NEMI launcher executable was not produced" }
