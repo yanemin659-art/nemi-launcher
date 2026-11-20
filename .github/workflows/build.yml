@@ -173,14 +173,20 @@ jobs:
 
   publish:
     name: Publish direct EXE and APK downloads
-    needs: [android]
+    needs: [windows, android]
     runs-on: ubuntu-latest
     steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: NEMI-LAUNCHER-Windows
+          path: release/windows
+
       - name: Download Android APK
         uses: actions/download-artifact@v4
         with:
           name: NEMI-LAUNCHER-Android
-          path: release
+          path: release/android
 
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
@@ -192,6 +198,7 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |
-            release/NEMI-LAUNCHER-Android.apk
+            release/windows/NEMI-LAUNCHER-Setup.exe
+            release/android/NEMI-LAUNCHER-Android.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
