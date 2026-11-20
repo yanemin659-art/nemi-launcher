@@ -69,6 +69,21 @@ jobs:
           windeployqt --release --compiler-runtime --qmldir "helixlauncher-gui/qml" "../../dist/windows/app/NEMI-LAUNCHER.exe"
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
+      - name: Smoke test Windows application startup
+        shell: pwsh
+        run: |
+          $appDir = Join-Path $PWD "dist/windows/app"
+          $exe = Join-Path $appDir "NEMI-LAUNCHER.exe"
+          if (!(Test-Path $exe)) { throw "Packaged launcher executable is missing" }
+          $process = Start-Process -FilePath $exe -WorkingDirectory $appDir -PassThru
+          Start-Sleep -Seconds 10
+          $process.Refresh()
+          if ($process.HasExited) {
+            throw "NEMI LAUNCHER exited during startup smoke test (exit code: $($process.ExitCode)). The installer will not be published."
+          }
+          Stop-Process -Id $process.Id -Force
+          Write-Host "Startup smoke test passed: launcher remained running for 10 seconds."
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
