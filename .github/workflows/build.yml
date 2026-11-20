@@ -69,20 +69,32 @@ jobs:
           windeployqt --release --compiler-runtime --qmldir "helixlauncher-gui/qml" "../../dist/windows/app/NEMI-LAUNCHER.exe"
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
 
-      - name: Smoke test Windows application startup
+      - name: Smoke test Windows application startup in clean environment
         shell: pwsh
         run: |
           $appDir = Join-Path $PWD "dist/windows/app"
           $exe = Join-Path $appDir "NEMI-LAUNCHER.exe"
           if (!(Test-Path $exe)) { throw "Packaged launcher executable is missing" }
+
+          # The Qt setup action injects machine-specific paths. Remove them so
+          # this test verifies the files actually bundled beside the launcher.
+          $env:QT_PLUGIN_PATH = $null
+          $env:QT_QPA_PLATFORM_PLUGIN_PATH = $null
+          $env:QML2_IMPORT_PATH = $null
+          $env:QML_IMPORT_PATH = $null
+          $env:Qt5_DIR = $null
+          $env:QT_ROOT_DIR = $null
+
+          $systemPath = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:PATH = "$appDir;$systemPath"
           $process = Start-Process -FilePath $exe -WorkingDirectory $appDir -PassThru
-          Start-Sleep -Seconds 10
+          Start-Sleep -Seconds 12
           $process.Refresh()
           if ($process.HasExited) {
-            throw "NEMI LAUNCHER exited during startup smoke test (exit code: $($process.ExitCode)). The installer will not be published."
+            throw "NEMI LAUNCHER exited in clean environment (exit code: $($process.ExitCode)). Installer will not be published."
           }
           Stop-Process -Id $process.Id -Force
-          Write-Host "Startup smoke test passed: launcher remained running for 10 seconds."
+          Write-Host "Clean-environment startup test passed: launcher remained running for 12 seconds."
 
       - name: Install Inno Setup
         shell: pwsh
