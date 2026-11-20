@@ -60,11 +60,13 @@ jobs:
     name: Android Minecraft Java APK
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Java
+      - name: Set up Java toolchains
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: |
+            8
+            21
 
       - name: Checkout Amethyst Android engine
         uses: actions/checkout@v4
