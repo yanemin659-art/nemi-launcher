@@ -26,7 +26,9 @@ jobs:
       - name: Apply NEMI interface files
         shell: pwsh
         run: |
-          Copy-Item "windows-ui\\*.qml" "source/HelixLauncher-main/helixlauncher-gui/qml/" -Force
+          Get-ChildItem "windows-ui" -Filter "*.qml" | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination "source/HelixLauncher-main/helixlauncher-gui/qml/" -Force
+          }
           if (!(Test-Path "source/HelixLauncher-main/helixlauncher-gui/qml/main.qml")) {
             throw "NEMI interface files were not applied"
           }
