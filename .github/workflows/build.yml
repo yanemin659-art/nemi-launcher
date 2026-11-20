@@ -1,0 +1,89 @@
+name: NEMI Launcher Cloud Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows launcher EXE
+    runs-on: windows-latest
+    steps:
+      - name: Checkout build configuration
+        uses: actions/checkout@v4
+
+      - name: Checkout HelixLauncher source
+        uses: actions/checkout@v4
+        with:
+          repository: HelixLauncher/HelixLauncher
+          path: helix
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Build Windows launcher
+        working-directory: helix
+        shell: pwsh
+        run: |
+          cargo build --release -p helixlauncher-gui
+          if (!(Test-Path "target/release/helixlauncher-gui.exe")) {
+            throw "Helix GUI executable was not produced"
+          }
+          New-Item -ItemType Directory -Force -Path ../dist/windows | Out-Null
+          Copy-Item "target/release/helixlauncher-gui.exe" "../dist/windows/NEMI-LAUNCHER.exe"
+          if (Get-Command windeployqt -ErrorAction SilentlyContinue) {
+            windeployqt --release --compiler-runtime "../dist/windows/NEMI-LAUNCHER.exe"
+          }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEMI-LAUNCHER-Windows-EXE
+          path: dist/windows/
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android Minecraft Java APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Checkout Amethyst Android engine
+        uses: actions/checkout@v4
+        with:
+          repository: AngelAuraMC/Amethyst-Android
+          ref: v3_openjdk
+          submodules: recursive
+          path: amethyst
+
+      - name: Build Minecraft Java Android launcher
+        working-directory: amethyst
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app_pojavlauncher:assembleDebug
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEMI-LAUNCHER-Android-Minecraft-Java-APK
+          path: amethyst/app_pojavlauncher/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
